@@ -1,0 +1,8 @@
+{
+  "name": "hook-server",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "github-webhook-handler": "^0.6.0"
+  }
+}
