@@ -1,4 +1,21 @@
-// import { extend } from './func'
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 
 function extend (to, ...args) {
   if (!args || args.length <= 0) { return to }
@@ -16,17 +33,22 @@ function extend (to, ...args) {
  * @param {DOMString} type
  * @param {Object} props
  */
-export function createEvent (context, type, props) {
+export function createEvent (target, type, props) {
   const event = new Event(type, { bubbles: false })
   // event.preventDefault()
   // event.stopPropagation()
 
   extend(event, props)
 
-  Object.defineProperty(event, 'target', {
-    enumerable: true,
-    value: context || null
-  })
+  try {
+    Object.defineProperty(event, 'target', {
+      enumerable: true,
+      value: target || null
+    })
+  }
+  catch (err) {
+    return extend({}, event, { target: target || null })
+  }
 
   return event
 }
@@ -36,7 +58,7 @@ export function createEvent (context, type, props) {
  * @param {DOMString} type
  * @param {Object} props
  */
-export function createCustomEvent (context, type, props) {
+export function createCustomEvent (target, type, props) {
   // compatibility: http://caniuse.com/#search=customevent
   // const event = new CustomEvent(type)
   const event = document.createEvent('CustomEvent')
@@ -46,11 +68,16 @@ export function createCustomEvent (context, type, props) {
 
   extend(event, props)
 
-  // TODO: event.target is readonly
-  Object.defineProperty(event, 'target', {
-    enumerable: true,
-    value: context || null
-  })
+  // event.target is readonly
+  try {
+    Object.defineProperty(event, 'target', {
+      enumerable: true,
+      value: target || null
+    })
+  }
+  catch (err) {
+    return extend({}, event, { target: target || null })
+  }
 
   return event
 }

@@ -1,6 +1,27 @@
-import { createEvent/*, nextFrame*/, fireLazyload } from '../../utils'
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+import { createEvent/*, nextFrame*/, fireLazyload, addTransform } from '../../utils'
 
 const TRANSITION_TIME = 200
+
+const MAIN_SLIDE_SCALE = 0.9
+const MAIN_SLIDE_OPACITY = 1
 
 // trigger scroll event frequency.
 // const scrollDam = 16
@@ -14,6 +35,13 @@ export default {
     },
 
     slideTo (index) {
+      if (!this.infinite || this.infinite === 'false') {
+        if (index === -1 || index > (this._cells.length - 1)) {
+          this.slideTo(this.currentIndex)
+          return
+        }
+      }
+
       const newIndex = this.normalizeIndex(index)
       const inner = this.$refs.inner
       const step = this._cells.length <= 1 ? 0 : this.currentIndex - index
@@ -44,13 +72,61 @@ export default {
         setTimeout(() => { this.reorder() }, TRANSITION_TIME)
       }
     },
-
+    order () {
+      this.$nextTick(() => {
+        for (let i = 1, l = this._cells.length; i < l; i++) {
+          const nextElm = this._cells[i].elm
+          const nextOffset = this.wrapperWidth * i
+          nextElm.style.webkitTransform = `translate3d(${nextOffset}px, 0, 0)`
+          nextElm.style.transform = `translate3d(${nextOffset}px, 0, 0)`
+        }
+        // this.reorder()
+      })
+    },
     reorder () {
+      // dir: 'current' | 'prev' | 'next'
+      const setPosition = (elm, dir) => {
+        const scale = window.weex.config.env.scale
+        let neighborScale = this.neighborScale
+        let opacity = this.neighborAlpha
+        let offsetX = -this.innerOffset
+        let offsetY = 0
+        if (dir === 'current') {
+          elm.style.zIndex = 1
+          neighborScale = MAIN_SLIDE_SCALE
+          opacity = MAIN_SLIDE_OPACITY
+        }
+
+        const origin = dir === 'prev' ? '100% 0' : '0 0'
+        elm.style.webkitTransformOrigin = origin
+        elm.style.transformOrigin = origin
+
+        const sign = dir === 'current' ? 0 : dir === 'prev' ? -1 : 1
+        offsetX = -this.innerOffset + sign * this.wrapperWidth
+        if (this.isNeighbor) {
+          offsetY = (1 - neighborScale) * this.wrapperHeight / 2
+          elm.style.opacity = opacity
+          if (dir === 'current') {
+            offsetX += this.wrapperWidth * (1 - neighborScale) / 2
+          }
+          else {
+            offsetX = offsetX - sign * this.neighborSpace * scale
+          }
+        }
+
+        elm.style.width = this.wrapperWidth + 'px'
+        addTransform(elm, {
+          translate: `translate3d(${offsetX}px, ${offsetY}px, 0)`,
+          scale: this.isNeighbor && `scale(${neighborScale})`
+        })
+      }
+
       const removeClone = (clone, prevElm) => {
         // switch current page.
-        const curTransform = `translate3d(${-this.innerOffset}px, 0, 0)`
-        prevElm.style.transform = curTransform
-        prevElm.style.webkitTransform = curTransform
+        setPosition(prevElm, 'current')
+        // const curTransform = `translate3d(${-this.innerOffset}px, 0, 0)`
+        // prevElm.style.transform = curTransform
+        // prevElm.style.webkitTransform = curTransform
         // remove clone node.
         clone && clone.parentElement.removeChild(clone)
       }
@@ -59,7 +135,10 @@ export default {
         if (this._cells.length <= 1) {
           return
         }
-
+        if (!this.infinite || this.infinite === 'false') {
+          this.order()
+          return
+        }
         const lastPrev = this._prevElm
         const prevIndex = this.normalizeIndex(this.currentIndex - 1)
         const nextIndex = this.normalizeIndex(this.currentIndex + 1)
@@ -68,7 +147,7 @@ export default {
         const currentElm = this._cells[this.currentIndex].elm
 
         // put current slide on the top.
-        currentElm.style.zIndex = 1
+        setPosition(currentElm, 'current')
 
         // clone prevCell if there are only tow slides.
         if (this._cells.length === 2) {
@@ -83,12 +162,8 @@ export default {
           prevElm = this._clonePrev
         }
 
-        const prevOffset = -this.wrapperWidth - this.innerOffset
-        prevElm.style.webkitTransform = `translate3d(${prevOffset}px, 0, 0)`
-        prevElm.style.transform = `translate3d(${prevOffset}px, 0, 0)`
-        const nextOffset = this.wrapperWidth - this.innerOffset
-        nextElm.style.webkitTransform = `translate3d(${nextOffset}px, 0, 0)`
-        nextElm.style.transform = `translate3d(${nextOffset}px, 0, 0)`
+        setPosition(prevElm, 'prev')
+        setPosition(nextElm, 'next')
       })
     },
 

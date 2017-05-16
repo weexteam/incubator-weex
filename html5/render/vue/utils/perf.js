@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 // @flow
 /**
  * @fileOverview: perf data recorder.
@@ -42,6 +61,8 @@ const IMG_REC_INDENT: number = 500  // record loading events after 500ms towards
 let earliestBeforeUpdateTime: number = 0
 let earliestBeforeCreateTime: number = 0
 
+let isFirstScreenDetected = false
+
 function getNow (): number {
   return performance.now ? performance.now() : new Date().getTime()
 }
@@ -50,6 +71,45 @@ function getEntries (): Array<any> {
   return performance.getEntries
     ? performance.getEntries()
     : [{ responseEnd: getNow() - IMG_REC_INDENT }]
+}
+
+function _d (func: Function, wait: number) {
+  let timerId
+  let now
+  function later (now) {
+    timerId = null
+    func(now)
+  }
+  return function () {
+    now = getNow()
+    clearTimeout(timerId)
+    timerId = setTimeout(later.bind(null, now), wait)
+  }
+}
+
+export function tagFirstScreen (time?: number): void {
+  if (!time) {
+    time = getNow()
+  }
+  perf.latestRenderFinishes.push(time)
+  const start = Math.max(earliestBeforeCreateTime, earliestBeforeUpdateTime)
+  perf.renderTime.push({
+    start,
+    end: time,
+    duration: time - start
+  })
+
+  const num = perf.renderTime.length
+  perf[`screenTime${num}`] = time
+  window.weex.emit('renderfinish', time)
+  if (!isFirstScreenDetected) {
+    isFirstScreenDetected = true
+    window.weex.emit('firstscreenfinish', time)
+  }
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`screenTime[${num}]: ${time} ms.`)
+    console.log('_weex_perf:', window._weex_perf)
+  }
 }
 
 /**
@@ -69,21 +129,7 @@ const debouncedTagImg = debounce(function () {
     })
     i++
   }
-  perf.latestRenderFinishes.push(end)
-  const start = Math.max(earliestBeforeCreateTime, earliestBeforeUpdateTime)
-  perf.renderTime.push({
-    start,
-    end,
-    duration: end - start
-  })
-
-  const num = perf.renderTime.length
-  perf[`screenTime${num}`] = end
-  window.weex.emit('renderfinish', end)
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`screenTime[${num}]: ${end} ms.`)
-    console.log('_weex_perf:', window._weex_perf)
-  }
+  tagFirstScreen(end)
 }, IMG_REC_INDENT)
 
 export function tagImg (): void {
@@ -103,11 +149,21 @@ export function tagBeforeCreate (): void {
   depressedTagBeforeCreate()
 }
 
+export function tagRootMounted (): void {
+  const now = getNow()
+  perf.latestMounts.push(now)
+  if (!perf.firstAllMountedTime) {
+    perf.firstAllMountedTime = now
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`first all mounted time: ${now} ms.`)
+    }
+  }
+}
+
 /**
  * recording the latest 'mounted' time.
  */
-const debouncedTagMounted = debounce(function () {
-  const now = getNow()
+const debouncedTagMounted = _d(function (now) {
   perf.latestMounts.push(now)
   perf.createTime.push({
     start: earliestBeforeCreateTime,
@@ -143,8 +199,7 @@ export function tagBeforeUpdate (): void {
 /**
  * recording the latest 'updated' time.
  */
-const debouncedTagUpdated = debounce(function () {
-  const now = getNow()
+const debouncedTagUpdated = _d(function (now) {
   perf.latestUpdates.push(now)
   perf.updateTime.push({
     start: earliestBeforeUpdateTime,

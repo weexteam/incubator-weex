@@ -1,4 +1,22 @@
-import { camelToKebab, appendStyle } from '../utils'
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+import { camelToKebab, appendCss, isArray } from '../utils'
 
 function getParentScroller (vnode) {
   if (!vnode) return null
@@ -65,31 +83,53 @@ export default {
    *   ps: scroll-to has 'ease' and 'duration'(ms) as options.
    */
   scrollToElement: function (vnode, options) {
-    const scroller = getParentScroller(vnode)
-    const scrollDirection = scroller.scrollDirection || 'vertical'
+    if (isArray(vnode)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[vue-render] the ref passed to animation.transitionOnce is a array.')
+      }
+      vnode = vnode[0]
+    }
 
-    if (scroller && scroller.$el && vnode.$el) {
+    const scroller = getParentScroller(vnode)
+    const scrollDirection = scroller && scroller.scrollDirection || 'vertical'
+
+    const isWindow = !scroller
+    const ct = isWindow ? document.body : scroller.$el
+    const el = vnode.$el
+
+    if (ct && el) {
       // if it's a list, then the listVnode.scrollDirection is undefined. just
       // assum it is the default value 'vertical'.
       const dSuffix = ({
         horizontal: 'Left',
         vertical: 'Top'
       })[scrollDirection]
-      let offset = vnode.$el[`offset${dSuffix}`]
+
+      const ctRect = ct.getBoundingClientRect()
+      const elRect = el.getBoundingClientRect()
+
+      const dir = dSuffix.toLowerCase()
+      let offset = el[`scroll${dSuffix}`] + elRect[dir] - ctRect[dir]
+      // let offset = el[`offset${dSuffix}`]
 
       if (options) {
-        offset += Number(options.offset) || 0
+        offset += options.offset && options.offset * weex.config.env.scale || 0
+        // offset *= weex.config.env.scale /* adapt offset to different screen scales. */
       }
       else if (process.env.NODE_ENV === 'development') {
         console.warn('[Vue Render] The second parameter of "scrollToElement" is required, '
           + 'otherwise it may not works well on native.')
       }
 
+      if (options && options.animated === false) {
+        return scrollElement.call(ct, dSuffix, offset)
+      }
+
       step({
-        scrollable: scroller.$el,
+        scrollable: ct,
         startTime: now(),
         frame: null,
-        startPosition: scroller.$el[`scroll${dSuffix}`],
+        startPosition: ct[`scroll${dSuffix}`],
         position: offset,
         method: scrollElement,
         dSuffix: dSuffix
@@ -103,6 +143,13 @@ export default {
    * @param {Function} callback
    */
   getComponentRect: function (vnode, callback) {
+    if (isArray(vnode)) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[vue-render] the ref passed to animation.transitionOnce is a array.')
+      }
+      vnode = vnode[0]
+    }
+
     const info = { result: false }
 
     if (vnode && vnode === 'viewport') {
@@ -144,6 +191,6 @@ export default {
       }
     }
     const styleText = `@${key}{${stylesText}}`
-    appendStyle(styleText, 'dom-added-rules')
+    appendCss(styleText, 'dom-added-rules')
   }
 }

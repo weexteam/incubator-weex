@@ -6,8 +6,9 @@
   module.exports = {
     data: function () {
       var root = typeof window === 'object' ? 'vue-web/vue' : 'vue'
+
       return {
-        items: [
+        items: [ 
           // common
           {name: root + '/syntax/hello-world', title: 'Hello World'},
           {name: root + '/style/index', title: 'Common Style'},
@@ -44,11 +45,21 @@
           // {name: root + '/showcase/minesweeper', title: 'Minesweeper'},
           // {name: root + '/showcase/ui', title: 'UI Gallery'},
           // {name: root + '/showcase/dropdown/dropdown-demo', title: 'Dropdown'}
+
+          // market
+          {name: root + '/market/gcanvas', title: 'Gcanvas'}
         ]
       }
     },
     components: {
       exampleList: require('./include/example-list.vue')
+    },
+    created: function() {
+      let root = typeof window === 'object' ? 'vue-web/vue' : 'vue'
+      let platform = this.$getConfig().env.platform.toLowerCase()
+      if (platform === 'ios') {
+        this.items.push({name: root + '/showcase/compositing', title: 'Compositing'})
+      }
     }
   }
 </script>
